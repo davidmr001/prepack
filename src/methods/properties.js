@@ -81,6 +81,16 @@ function InternalSetProperty(realm: Realm, O: ObjectValue, P: PropertyKeyValue, 
     propertyBinding = { descriptor: undefined, object: O, key: key };
     map.set(key, propertyBinding);
   }
+  if (O.isExernallyVisible()) {
+    if (key === undefined || key instanceof SymbolValue)
+      throw realm.createIntrospectionErrorThrowCompletion("TODO");
+    invariant(realm.generator !== undefined);
+    realm.generator.emitDefineProperty(O, key, desc);
+    let val = desc.value;
+    if (val instanceof ObjectValue || val instanceof AbstractObjectValue) {
+      val.makeExernallyVisible();
+    }
+  }
   realm.recordModifiedProperty(propertyBinding);
   propertyBinding.descriptor = desc;
 }
@@ -350,6 +360,12 @@ export function OrdinaryDelete(realm: Realm, O: ObjectValue, P: PropertyKeyValue
     let map = InternalGetPropertiesMap(O, P);
     let propertyBinding = map.get(key);
     invariant(propertyBinding !== undefined);
+    if (O.isExernallyVisible()) {
+      if (key === undefined || key instanceof SymbolValue)
+        throw realm.createIntrospectionErrorThrowCompletion("TODO");
+      invariant(realm.generator !== undefined);
+      realm.generator.emitPropertyDelete(O, key);
+    }
     realm.recordModifiedProperty(propertyBinding);
     propertyBinding.descriptor = undefined;
     InternalUpdatedProperty(realm, O, P);

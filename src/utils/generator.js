@@ -10,7 +10,7 @@
 /* @flow */
 
 import type { Realm } from "../realm.js";
-import { AbstractValue, Value, FunctionValue, UndefinedValue, NullValue, StringValue, BooleanValue, NumberValue, SymbolValue, ObjectValue, ConcreteValue } from "../values/index.js";
+import { AbstractValue, AbstractObjectValue, Value, FunctionValue, UndefinedValue, NullValue, StringValue, BooleanValue, NumberValue, SymbolValue, ObjectValue, ConcreteValue } from "../values/index.js";
 import type { AbstractValueBuildNodeFunction } from "../values/AbstractValue.js";
 import type { Descriptor } from "../types.js";
 import { TypesDomain, ValuesDomain } from "../domains/index.js";
@@ -59,6 +59,9 @@ export class Generator {
   }
 
   emitGlobalAssignment(key: string, value: Value) {
+    if (value instanceof ObjectValue || value instanceof AbstractObjectValue) {
+      value.makeExernallyVisible();
+    }
     this.body.push({
       args: [value],
       buildNode: ([valueNode]) => t.expressionStatement(t.assignmentExpression(
@@ -74,6 +77,16 @@ export class Generator {
       buildNode: ([]) => t.expressionStatement(t.unaryExpression(
         "delete",
         this.preludeGenerator.globalReference(key, true)))
+    });
+  }
+
+  emitAbstractPropertyAssignment(object: Value, key: AbstractValue, value: Value) {
+    this.body.push({
+      args: [object, key, value],
+      buildNode: ([objectNode, keyNode, valueNode]) => t.expressionStatement(t.assignmentExpression(
+        "=",
+        t.memberExpression(objectNode, keyNode, true),
+        valueNode))
     });
   }
 
@@ -118,11 +131,12 @@ export class Generator {
   }
 
   emitPropertyDelete(object: Value, key: string) {
+    let isValidId = t.isValidIdentifier(key);
     this.body.push({
       args: [object],
       buildNode: ([objectNode]) => t.expressionStatement(t.unaryExpression(
         "delete",
-        t.memberExpression(objectNode, t.identifier(key))))
+        t.memberExpression(objectNode, isValidId ? t.identifier(key) : t.stringLiteral(key), !isValidId)))
     });
   }
 

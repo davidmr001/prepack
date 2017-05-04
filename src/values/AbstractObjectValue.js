@@ -79,6 +79,13 @@ export default class AbstractObjectValue extends AbstractValue {
     return result;
   }
 
+  makeExernallyVisible(): void {
+    for (let element of this.values.getElements()) {
+      invariant(element instanceof ObjectValue);
+      element.makeExernallyVisible();
+    }
+  }
+
   makeNotPartial(): void {
     for (let element of this.values.getElements()) {
       invariant(element instanceof ObjectValue);

@@ -12,7 +12,7 @@
 import type { Realm, ExecutionContext } from "../realm.js";
 import type { IterationKind, PromiseCapability, PromiseReaction, DataBlock, PropertyKeyValue, PropertyBinding, Descriptor, ObjectKind, TypedArrayKind } from "../types.js";
 import { TypesDomain, ValuesDomain } from "../domains/index.js";
-import { Value, AbstractValue, ConcreteValue, BooleanValue, StringValue, SymbolValue, NumberValue, UndefinedValue, NullValue, FunctionValue, NativeFunctionValue } from "./index.js";
+import { Value, AbstractValue, AbstractObjectValue, ConcreteValue, BooleanValue, StringValue, SymbolValue, NumberValue, UndefinedValue, NullValue, FunctionValue, NativeFunctionValue } from "./index.js";
 import type { NativeFunctionCallback } from "./index.js";
 import { joinValuesAsConditional, IsDataDescriptor, OrdinarySetPrototypeOf, OrdinaryDefineOwnProperty, OrdinaryDelete,
    OrdinaryOwnPropertyKeys, OrdinaryGetOwnProperty, OrdinaryGet, OrdinaryHasProperty, OrdinarySet,
@@ -27,6 +27,7 @@ export default class ObjectValue extends ConcreteValue {
     if (realm.isPartial) this.setupBindings();
     this.$Prototype = proto || realm.intrinsics.null;
     this.$Extensible = realm.intrinsics.true;
+    this._isExternallyVisible = realm.intrinsics.false;
     this._isPartial = realm.intrinsics.false;
     this._isSimple = realm.intrinsics.false;
     this.properties = new Map();
@@ -157,6 +158,11 @@ export default class ObjectValue extends ConcreteValue {
   // backpointer to the constructor if this object was created its prototype object
   originalConstructor: void | FunctionValue;
 
+  // The object is now visible to code that is not analyzed by Prepack.
+  // Reads and writes of object properties should retain the order in which
+  // they appear in the source code.
+  _isExternallyVisible: BooleanValue;
+
   // partial objects
   _isPartial: BooleanValue;
 
@@ -176,6 +182,20 @@ export default class ObjectValue extends ConcreteValue {
     return this;
   }
 
+  makeExernallyVisible(): void {
+    if (this._isExternallyVisible.value) return;
+    this._isExternallyVisible = this.$Realm.intrinsics.true;
+    for (let propertyBinding of this.properties.values()) {
+      let desc = propertyBinding.descriptor;
+      if (desc === undefined) continue; // deleted
+      if (!IsDataDescriptor(this.$Realm, desc)) continue;
+      let val = desc.value;
+      if (val instanceof ObjectValue || val instanceof AbstractObjectValue) {
+        val.makeExernallyVisible();
+      }
+    }
+  }
+
   makeNotPartial(): void {
     this._isPartial = this.$Realm.intrinsics.false;
   }
@@ -186,6 +206,10 @@ export default class ObjectValue extends ConcreteValue {
 
   makeSimple(): void {
     this._isSimple = this.$Realm.intrinsics.true;
+  }
+
+  isExernallyVisible(): boolean {
+    return this._isExternallyVisible.value;
   }
 
   isPartial(): boolean {
@@ -494,6 +518,10 @@ export default class ObjectValue extends ConcreteValue {
       this.unknownProperty = prop;
     } else {
       prop = this.unknownProperty;
+    }
+    if (this.isExernallyVisible()) {
+      invariant(this.$Realm.generator !== undefined);
+      this.$Realm.generator.emitAbstractPropertyAssignment(this, P, V);
     }
     this.$Realm.recordModifiedProperty(prop);
     let desc = prop.descriptor;

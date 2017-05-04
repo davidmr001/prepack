@@ -35,7 +35,7 @@
     "test-internal": "babel-node --stack_size=10000 --stack_trace_limit=200 --max_old_space_size=8192 scripts/test-internal.js",
     "test": "npm run test-serializer && npm run test-sourcemaps && npm run test-test262 && npm run test-internal",
     "repl": "node lib/repl-cli.js",
-    "prepack": "node lib/prepack-cli.js",
+    "prepack": "node --stack_size=10000 --stack_trace_limit=200 --max_old_space_size=8192 lib/prepack-cli.js",
     "validate": "npm run build && npm run lint && npm run depcheck && npm run flow && npm test",
     "prepublish": "npm run build",
     "depcheck": "babel-node scripts/detect_bad_deps.js"
