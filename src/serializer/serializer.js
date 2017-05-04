@@ -743,6 +743,65 @@ export class Serializer {
     return t.arrayExpression(elems);
   }
 
+  _serializeValueMap(name: string, val: ObjectValue, reasons: Array<string>): BabelNodeExpression {
+    let kind = val.getKind();
+    let elems = [];
+
+    let entries;
+    if (kind === "Map") {
+      entries = val.$MapData;
+    } else {
+      invariant(kind === "WeakMap");
+      entries = val.$WeakMapData;
+    }
+    invariant(entries !== undefined);
+    let len = entries.length;
+
+    for (let i = 0; i < len; i++) {
+      let entry = entries[i];
+      let key = entry.$Key;
+      if (key === undefined) continue;
+      let serializedKey = this.serializeValue(key, reasons);
+      let value = entry.$Value;
+      if (value === undefined) continue;
+      let serializedValue = this.serializeValue(value, reasons);
+      let elem = t.arrayExpression([serializedKey, serializedValue]);
+      elems.push(elem);
+    }
+
+    this.addProperties(name, val, reasons, val.properties);
+    let arrayValue = t.arrayExpression(elems);
+    return t.newExpression(
+      this.preludeGenerator.memoizeReference(kind), [arrayValue]);
+  }
+
+  _serializeValueSet(name: string, val: ObjectValue, reasons: Array<string>): BabelNodeExpression {
+    let kind = val.getKind();
+    let elems = [];
+
+    let entries = val.$SetData;
+    if (kind === "Set") {
+      entries = val.$SetData;
+    } else {
+      invariant(kind === "WeakSet");
+      entries = val.$WeakSetData;
+    }
+    invariant(entries !== undefined);
+    let len = entries.length;
+
+    for (let i = 0; i < len; i++) {
+      let entry = entries[i];
+      if (entry === undefined) continue;
+      let elem = this.serializeValue(entry, reasons);
+      elems.push(elem);
+    }
+
+    this.addProperties(name, val, reasons, val.properties);
+    let arrayValue = t.arrayExpression(elems);
+    return t.newExpression(
+      this.preludeGenerator.memoizeReference(kind), [arrayValue]);
+  }
+
   _serializeValueTypedArray(name: string, val: ObjectValue, reasons: Array<string>): BabelNodeExpression {
     let elems = [];
 
@@ -975,6 +1034,12 @@ export class Serializer {
       case "Uint32Array":
       case "Uint8ClampedArray":
         return this._serializeValueTypedArray(name, val, reasons);
+      case "Map":
+      case "WeakMap":
+        return this._serializeValueMap(name, val, reasons);
+      case "Set":
+      case "WeakSet":
+        return this._serializeValueSet(name, val, reasons);
       default:
         if (kind !== "Object")
           this.logger.logError(val, `Serialization of an object of kind ${kind} is not supported.`);
